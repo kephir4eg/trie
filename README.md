@@ -1,6 +1,7 @@
 # C++11 Trie Implementation
 
-This is a customizable compressed prefix [trie](https://en.wikipedia.org/wiki/Trie "Trie") (not exactly Radix tree).
+This is a C++ implementation of 
+compressed prefix [trie](https://en.wikipedia.org/wiki/Trie "Trie").
 
 To use it, you don't need to clone the repository.
 You only need to download one single file, *trie.h*.
@@ -10,15 +11,21 @@ All the implementation is in one header.
 
 ### When to use
 
-Using trie is beneficial have a lot of very long strings having the common prefix 
+Using trie is beneficial when have a lot of very long strings having the common prefix 
 (e.g. urls, file paths) and you want to use them as keys for set or map. 
-Trie will provide you with performance, close to the one of hash table,
-but with some benefits, like partial search (currently by prefix substring).
+Trie will provide you with performance, close to the one of hash table 
+(still worse on average, however), but with some benefits, like partial search 
+(currently by prefix substring).
+
+How long is very long? Is would say that the real difference will only become 
+noticeable when the average length is greater then CPU cache line (usually 64 bytes).
+Below that I would not expect benefit in performance over the 
+normal map operations.
 
 In future, I plan to implement fast pattern matching and edit distance search,
 which cannot be implemented efficiently with hash table.
 
-Trie is also theoretically is more space efficient then just regular map/unordered_map.
+Trie is also theoretically is more space efficient then just regular `map`/`unordered_map`.
 In practice that heavily depends on the nature of strings you have.
 
 ## Motivation
@@ -26,7 +33,7 @@ In practice that heavily depends on the nature of strings you have.
 First, a minute of being honest, the real motivation behind this project 
 is to get myself familiar with new C++11 features. That's why, you will 
 probably find excessive use of lambda expressions, unnecessary templates, 
-usage of 'and' keyword instead of '&&' etc. Having said that, I'm going to 
+usage of `and` keyword instead of `&&` etc. Having said that, I'm going to 
 use this implementation in some small projects of mine.
 
 I am going to work on this to make it a really usable library.
@@ -47,8 +54,8 @@ This is a very solid implementation, but I am not sure whether it's supported an
 The trie implementation has some caveats which should be mentioned 
 from the beginning.
 
-* value_type for this map is actually something, which is called 
-  mapped_type in the regular std::map. We don't store the key string 
+* `value_type` for this map is actually something, which is called 
+  `mapped_type` in the regular `std::map`. We don't store the key string 
   in a way normal map stores it.
 
 * Very heavy-weight iterator. In fact iterator always holds the 
@@ -56,7 +63,7 @@ from the beginning.
 
 ### As Regular Map
 
-```
+```C++
 {
     typedef trie::trie_map<char, int> TestMap;
     TestMap tmap;
@@ -81,12 +88,13 @@ from the beginning.
 ### As Regular Set
 
 Since there is no additional cost involved, the trie can be used as multiset.
-In order to do that the value type should be specified as trie::SetCounter.
-Note, that specifying SetCounter as value type is different then 
-just specifying int. Internally, SetCounter provides different node 
-implementation.
+In order to do that the value type should be specified as `trie::SetCounter`.
+Note, that specifying `SetCounter` as value type is different then 
+just specifying `int`. Internally, `SetCounter` provides different node 
+implementation, which is more efficient. It is very similar to `int`, but 
+uses 0 as a special value to distinguish between leaf and non-leaf nodes.
 
-```
+```C++
 {
     typedef trie::trie_map<char, trie::SetCounter> TestSet;
     TestSet tset;
@@ -108,23 +116,23 @@ implementation.
 1 1 0 0
 ```
 
-It's not recommended to use find or find_prefix to look for key in set, 
-because the iterators they return are heavyweight. Function contains
-does much more efficient lookup.
+It's not recommended to use `find()` or `find_prefix()` to look for key in set,
+because the iterator they return is very heavy. Function `contains()`
+does a much more efficient lookup.
 
 ### Iterating Over Trie
 
 Trie is a different from the map when it comes to iterating over objects.
 The reason for that difference is that it does not really store keys,
-so dereferencing the iterator does not return pair<key, value>, instead it 
-only returns the reference to the value. To obtain key, we call key()
-method of the iterator, which reconstructs the key().
+so dereferencing the iterator does not return `pair<key, value>`, instead it 
+only returns the reference to the value. To obtain key, we call `key()`
+method of the iterator, which reconstructs the key (thus, somewhat slow).
 
 Also note, that iterator itself is very heavy, since we store the whole 
 path to the current node in the tree. One can think of that as a drawback, 
 but on the other hand, we don't have to store parent node reference this way.
 
-```
+```C++
 {
     typedef trie::trie_map<char, int> TestMap;
     TestMap tmap;
@@ -138,8 +146,6 @@ but on the other hand, we don't have to store parent node reference this way.
         std::cout << *it << " ";
     }
 
-    std::cout << "\n";
-
     for (auto it = tmap.begin(); it != tmap.end(); ++it) {
         std::cout << it.key() << " ";
     }
@@ -150,18 +156,19 @@ but on the other hand, we don't have to store parent node reference this way.
 1 2 4 3 10.0.0.1 10.0.17.8 192.168.0.2 192.168.0.1 
 ```
 
-From the perspective of ordering, trie is somewhat between map 
-and unordered_map. The only order, which is guarantees is that during iteration, 
-any string appears later then it's prefix string. However, strict ordering is 
-possible, it just requires even more complicated iterator.
+From the perspective of ordering, trie is somewhat in the middle between `map` 
+and `unordered_map`. The only order, which is guaranteed during iteration is that
+any string appears later then any of its prefix substring. However, strict ordering 
+can be achieved, it just requires a more sophisticated iterator (TBD).
 
 ### Subtrie Iterator
 
-There is a special kind of iterator, which is subtrie iterator. It is returned by
-find_prefix() method. After the subtrie is traversed, the iterator becomes equal 
-to end(). End iterator is universal for trie and it's subtries.
+There is a special kind of iterator, which is _subtrie iterator_. It is returned by
+`find_prefix()` method. After the subtrie is traversed (regular `++` operator), 
+the iterator becomes equal to the _end iterator_. So, _end iterator_ is universal 
+for trie and any of its subtries.
 
-```
+```C++
 {
     typedef trie::trie_map<char, int> TestMap;
     TestMap tmap;
@@ -191,14 +198,20 @@ Wiki to read on subject:
 
 ## Testing
 
+TBD
+
 ## Performance
 
+TBD
+
 ### Theoretical
+
+TBD
 
 ### Real Evaluations
 
 I am only comparing this library to standard map. If anyone wants to do 
-comparison against existing trie implementations (like boost::tst or PATL), 
+comparison against existing trie implementations (like `boost::tst` or `PATL`), 
 I'd be glad to help with that. My expectation is they are going to be 
 a little faster.
 
@@ -207,6 +220,8 @@ TBD
 ## Future Plans
 
 ### Small Improvements.
+
+* Delete and remove
 
 * Custom allocators
 
@@ -219,7 +234,7 @@ instead of string
 
 ### Big Changes
 
-* Delete and squeeze to increase locality
+* Implement squeeze to increase locality
 
 * Implement editing distance lookup
 

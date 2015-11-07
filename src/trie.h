@@ -19,28 +19,6 @@ struct SetCounter { };
 namespace detail
 {
 
-/**
- * How to get a cell to put Atom to in case it's not char/other integer type
- */
-template<typename AtomT>
-int atom_hash(AtomT x, int bucket_size) {
-    return (x % bucket_size);
-}
-
-template<typename AtomT>
-int least_uncolliding_size(AtomT a, AtomT b)
-{
-    unsigned int v = (a ^ b);
-    return (v & -v) << 1;
-}
-
-template<>
-int least_uncolliding_size(char a, char b) 
-{
-    unsigned int v = ((int) a ^ (int) b);
-    return (v & -v) << 1;
-}
-
 template <typename AtomT, typename PrefixHolderT>
 struct TrieNode : public PrefixHolderT
 {
@@ -54,7 +32,17 @@ private:
 public:
     typedef self_type * const * map_iterator;
 
-    TrieNode(int hint) { resize(hint); }
+    TrieNode(int hint) { if (hint > 0) { resize(hint); } }
+
+    inline static int atom_hash(AtomT x, uint32_t mask) {
+        return (x & mask);
+    }
+
+    inline static int least_uncolliding_size(AtomT a, AtomT b)
+    {
+        unsigned int v = ((int) a ^ (int) b);
+        return (v & -v) << 1;
+    }
 
     static self_type * value(map_iterator x) { return *x; };
 
@@ -68,7 +56,7 @@ public:
         if (new_size > size) {
             for (uint32_t i = 0; i < size; ++i) {
                 if (data[i] != nullptr) {
-                    ndata[atom_hash(*data[i]->kbegin(), new_size)] = data[i];
+                    ndata[atom_hash(*data[i]->kbegin(), new_size - 1)] = data[i];
                 }
             }
         }
@@ -82,14 +70,14 @@ public:
     {
         if (size != 0)
         {
-            map_iterator result = data + atom_hash(x, size);
+            map_iterator result = data + atom_hash(x, size-1);
 
-            if (nullptr != *result and (*(*result)->kbegin() == x)) {
+            if (nullptr != *result and (*result)->starts_with(x)) {
                 return result;
             }
         }
 
-        return end();
+        return nullptr;
     }
 
     ~TrieNode() { resize(0); };
@@ -100,7 +88,7 @@ public:
 
         if (size == 0) { resize(2); }
 
-        int hash = atom_hash(x, size);
+        int hash = atom_hash(x, size-1);
 
         if (data[hash] == nullptr) {
             data[hash] = edge;
@@ -109,11 +97,12 @@ public:
 
         resize(least_uncolliding_size(x, *data[hash]->kbegin()));
 
-        data[atom_hash(x, size)] = edge;
+        data[atom_hash(x, size-1)] = edge;
     }
 
     map_iterator begin() const { return data; }
     map_iterator end()   const { return data + size; }
+    std::nullptr_t nf()  const { return nullptr; }
 
     void split(self_type * next, int breakIdx)
     {
@@ -303,6 +292,7 @@ private:
 public:
     typedef const AtomT * key_iterator;
 
+    bool starts_with(AtomT x) const { return (*chunk)[begin] == x; };
     key_iterator kbegin() const { return std::addressof((*chunk)[begin]); };
     key_iterator kend()   const { return std::addressof((*chunk)[end]); };
 
@@ -337,6 +327,7 @@ private:
 public:
     typedef const AtomT * key_iterator;
 
+    bool starts_with(AtomT x) const { return *prefix == x; };
     key_iterator kbegin() const { return prefix; };
     key_iterator kend()   const { return prefix + prefix_len; };
 
@@ -582,7 +573,7 @@ private:
 
             NodeItr next_edge = n->find(*it);
 
-            if (next_edge == n->end())
+            if (next_edge == n->nf())
             {
                 noNextEdgeAction(n, it);
                 return;
@@ -887,6 +878,9 @@ public:
     {
         return at(str.begin(), str.end());
     }
+
+    size_t _edges() { return edges.size(); }
+    size_t _keys()  { return keys.size(); }
 
     struct _debug_print
     {
