@@ -2,6 +2,7 @@
 
 #include <map>
 #include <chrono>
+#include <algorithm>
 #include <fstream>
 #include <sstream>
 
@@ -9,7 +10,6 @@ typedef trie::trie_map<char, int>    TestCountingSet;
 typedef trie::trie_map<char, int, 0> TestCountingSimpleSet;
 
 typedef std::vector<std::string>     WordSet;
-
 typedef std::map<std::string, int>   StringMap;
 
 template <typename Container>
@@ -21,7 +21,7 @@ struct StringInserter
 
     void operator()(const std::string & key, const value_type & x)
     {
-        m.insert(key.begin(), key.end(), x);
+        m.insert(key, x);
     }
 };
 
@@ -34,7 +34,7 @@ struct StringLookup
 
     value_type * operator()(const std::string & key)
     {
-        return m.get(key.begin(), key.end());
+        return m.get(key);
     }
 };
 
@@ -118,6 +118,21 @@ struct perf_clock
     }
 };
 
+std::ostream & operator << (std::ostream & stream, const std::vector<int> & x)
+{
+    stream << "[";
+
+    if (x.size() != 0)
+    {
+        std::for_each(x.begin(), x.end() - 1, [&stream] (int y) { stream << y << ", "; });
+        stream << *x.rbegin();
+    }
+
+    stream << "]";
+
+    return stream;
+}
+
 template <typename Container>
 struct ContainerTest
 {
@@ -135,12 +150,69 @@ struct ContainerTest
         StringInserter<Container> inserter(cont);
         StringLookup<Container>   lookup(cont);
 
+        inserter("abcabcabc", 1);
         inserter("abcabc",    1);
-        inserter("abcabcabc", 2);
-        inserter("abcvabc",   3);
-        inserter("abcxabc",   4);
-        inserter("abcyasbc",  5);
-    };
+        inserter("abcvabc",   1);
+        inserter("abcxabc",   1);
+        inserter("abcyasbc",  1);
+        inserter("xabcvabc",  1);
+        inserter("xabcxabc",  1);
+        inserter("xabcyasbc", 1);
+
+        lookup("abcabc");
+    }
+
+    void words(Generator & generator)
+    {
+        std::vector<std::string> wset;
+        StringInserter<Container> inserter(cont);
+        StringLookup<Container>   lookup(cont);
+        int total = 20;
+
+        for (int i = 0; i < total; ++i) {
+            wset.push_back(generator());
+        }
+
+        for (int i = 0; i < total; ++i) {
+            inserter(wset[i], 1);
+        }
+
+        int lost = total;
+
+        for (int i = 0; i < total; ++i) {
+            if (0 != lookup(wset[i])) {
+                --lost;
+            }
+        }
+
+        std::cout << "Lost : " << lost << std::endl;
+    }
+
+    void word_set(Generator & generator)
+    {
+        std::vector<std::string> wset;
+        StringInserter<Container> inserter(cont);
+        StringLookup<Container>   lookup(cont);
+        int total = 100;
+
+        for (int i = 0; i < total; ++i) {
+            wset.push_back(generator());
+        }
+
+        for (int i = 0; i < total; ++i) {
+            cont.insert(wset[i]);
+        }
+
+        int lost = total;
+
+        for (int i = 0; i < total; ++i) {
+            if (0 != lookup(wset[i])) {
+                --lost;
+            }
+        }
+
+        std::cout << "Lost : " << lost << std::endl;
+    }
 
     void test(Generator & generator)
     {
@@ -216,7 +288,7 @@ int main()
 
     {
         std::ifstream fin("/usr/share/dict/words");
-        std::string line;
+        std::string   line;
 
         while (getline(fin, line)) {
             words.wordset.push_back(line);
@@ -227,9 +299,147 @@ int main()
     std::random_shuffle(words.wordset.begin(), words.wordset.end(), words.rnd);
 
     {
-        ContainerTest<TestCountingSet> simple("trie");
+        typedef trie::trie_map<char, int> TestMap;
+        TestMap tmap;
+
+        tmap.insert("105", 1);
+        tmap.insert("104", 2);
+        tmap.insert("2093", 3);
+        tmap.insert("2097", 4);
+
+        std::cout << tmap["105"] << " ";
+        std::cout << tmap["104"] << " ";
+        std::cout << tmap["2093"] << " ";
+        std::cout << tmap["2097"] << " ";
+        std::cout << std::endl;
+    }
+
+    {
+        typedef trie::trie_map<char, int> TestMap;
+        TestMap tmap;
+
+        tmap.insert("10.0.0.1",    1);
+        tmap.insert("10.0.17.8",   2);
+        tmap.insert("192.168.0.1", 3);
+        tmap.insert("192.168.0.2", 4);
+
+        for (auto it = tmap.begin(); it != tmap.end(); ++it) {
+            std::cout << *it << " ";
+        }
+
+        std::cout << std::endl;
+
+        for (auto it = tmap.begin(); it != tmap.end(); ++it) {
+            std::cout << it.key() << " ";
+        }
+
+        std::cout << std::endl;
+    }
+
+    {
+        typedef trie::trie_map<char, trie::SetCounter> TestSet;
+        TestSet tset;
+
+        tset.insert("10.0.0.1");
+        tset.insert("10.0.17.8");
+        tset.insert("192.168.0.1");
+        tset.insert("192.168.0.2");
+
+        std::cout << tset.contains("10.0.0.1") << " ";
+        std::cout << tset.contains("10.0.17.8") << " ";
+        std::cout << tset.contains("10.0.17.2") << " ";
+        std::cout << tset.contains("10.0.1.1") << " ";
+        std::cout << std::endl;
+    }
+
+    {
+        typedef trie::trie_map<char, int> TestMap;
+        TestMap tmap;
+
+        tmap.insert("/home/user1/audio", 10);
+        tmap.insert("/home/user1/video", 11);
+        tmap.insert("/home/user2/audio", 20);
+        tmap.insert("/home/user2/video", 21);
+
+        for (auto it = tmap.find_prefix("/home/user1"); it != tmap.end(); ++it) {
+            std::cout << it.key() << " ";
+            std::cout << *it << ";\n";
+        }
+
+        std::cout << std::endl;
+    }
+
+    {
+        typedef trie::trie_map<char, int, 16> TestMap;
+        ContainerTest<TestMap> simple("trie");
         simple.simple();
-        std::cout << TestCountingSet::debug_print(simple.cont) << std::endl;
+        std::cout << TestMap::_debug_print(simple.cont) << std::endl;
+    }
+
+    {
+        typedef trie::trie_map<char, int, 1024> TestMap;
+        ContainerTest<TestMap> simple("trie");
+        simple.words(words);
+        std::cout << TestMap::_debug_print(simple.cont) << std::endl;
+    }
+
+    {
+        typedef trie::trie_map<char, trie::SetCounter> TestSet;
+        ContainerTest<TestSet> simple("trie_set");
+        simple.simple();
+
+        for (auto it = simple.cont.begin(); it != simple.cont.end(); ++it)
+        {
+            std::cout << it.key() << std::endl;
+        }
+
+        bool found;
+        auto it = simple.cont.find_prefix("abc", found);
+
+        std::cout << " *** prefix exact match : " << found << std::endl;
+
+        for (; it != simple.cont.end(); ++it)
+        {
+            std::cout << it.key() << std::endl;
+        }
+
+        it = simple.cont.find_prefix("abcabc", found);
+
+        std::cout << " *** prefix exact match : " << found << std::endl;
+
+        for (; it != simple.cont.end(); ++it)
+        {
+            std::cout << it.key() << std::endl;
+        }
+
+        it = simple.cont.find_prefix("xabc",
+            [] () { std::cout << "Error!" << std::endl; });
+
+        it = simple.cont.find_prefix("xabcxabc",
+            [] () { std::cout << "OK exact prefix found!" << std::endl; });
+
+        std::cout << " *** countains 'abcvabc' : " << simple.cont.contains("abcvabc") << std::endl;
+
+        it = simple.cont.find("xabcxabc");
+
+        for (; it != simple.cont.end(); ++it)
+        {
+            std::cout << it.key() << std::endl;
+        }
+    }
+
+    {
+        typedef trie::trie_map<char, trie::SetCounter> TestSet;
+        ContainerTest<TestSet> simple("trie_set");
+        simple.word_set(words);
+        std::cout << TestSet::_debug_print(simple.cont) << std::endl;
+
+        auto it = simple.cont.find("yaray");
+
+        for (; it != simple.cont.end(); ++it)
+        {
+            std::cout << it.key() << std::endl;
+        }
     }
 
     words.wordset.resize(200000);
@@ -247,14 +457,46 @@ int main()
             ContainerTest<StringMap> test1("map");
             words.rnd.seed = 9;
             test1.test(words);
+
+            std::cout << "mapX = "      << test1.numberOfItems << std::endl;
+            std::cout << "mapInsert = " << test1.insertTime << std::endl;
+            std::cout << "mapLookup = " << test1.lookupTime << std::endl;
         }
 
-        std::cout << "*** Trie : " << std::endl;
+        std::cout << "*** Trie 0 : " << std::endl;
 
         {
-            ContainerTest<TestCountingSet> test1("trie");
+            ContainerTest<trie::trie_map<char, int, 0> > test1("trie");
             words.rnd.seed = 9;
             test1.test(words);
+
+            std::cout << "trie0X = "      << test1.numberOfItems << std::endl;
+            std::cout << "trie0Insert = " << test1.insertTime << std::endl;
+            std::cout << "trie0Lookup = " << test1.lookupTime << std::endl;
+        }
+
+        std::cout << "*** Trie 1K : " << std::endl;
+
+        {
+            ContainerTest<trie::trie_map<char, int, 1024> > test1("trie");
+            words.rnd.seed = 9;
+            test1.test(words);
+
+            std::cout << "trie1X = "      << test1.numberOfItems << std::endl;
+            std::cout << "trie1Insert = " << test1.insertTime << std::endl;
+            std::cout << "trie1Lookup = " << test1.lookupTime << std::endl;
+        }
+
+        std::cout << "*** Trie 4K : " << std::endl;
+
+        {
+            ContainerTest<trie::trie_map<char, int, 4*1024> > test1("trie");
+            words.rnd.seed = 9;
+            test1.test(words);
+
+            std::cout << "trie4X = "      << test1.numberOfItems << std::endl;
+            std::cout << "trie4Insert = " << test1.insertTime << std::endl;
+            std::cout << "trie4Lookup = " << test1.lookupTime << std::endl;
         }
 
         words.seqsz++;
