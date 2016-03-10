@@ -621,7 +621,7 @@ public:
                 ++msize;
             },
 
-            [] (NodeItr x, KeyIterator) { }
+            [] (NodeItr x, KeyIterator) { (void)x; }
         );
     }
 
