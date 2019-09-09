@@ -816,7 +816,7 @@ public:
             [&output] (NodeItr x, KeyIterator)   { output->push(x); }
         );
 
-        return iterator(output);
+        return (output == nullptr) ? iterator() : iterator(output);
     }
 
     iterator find(const std::basic_string<AtomT> & str)
