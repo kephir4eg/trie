@@ -10,6 +10,7 @@
 #include <iostream>
 #include <utility>
 #include <type_traits>
+#include <cstdint>
 
 namespace trie
 {
@@ -247,7 +248,7 @@ template <typename ValueT>
 struct ValueHolder
 {
 private:
-    std::auto_ptr<ValueT> value;
+    std::unique_ptr<ValueT> value;
 public:
     typedef ValueT value_type; /* Effective type */
 
